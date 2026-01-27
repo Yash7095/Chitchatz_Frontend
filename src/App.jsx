@@ -8,15 +8,17 @@ import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 
-import { userAuthStore } from "./store/useAuthStore.js";
+import { useAuthStore } from "./store/useAuthStore.js";
 import { userThemeStore } from "./store/useThemeStore.js";
 
 import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth } = userAuthStore();
+  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
   const { theme } = userThemeStore();
+
+  console.log("Online Users:", onlineUsers);
 
   useEffect(() => {
     checkAuth();

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { userAuthStore } from "../store/useAuthStore.js";
+import { useAuthStore } from "../store/useAuthStore.js";
 import { Camera, Mail, User } from "lucide-react";
 
 const ProfilePage = () => {
-  const { isUpdatingProfile, updateProfile, authUser } = userAuthStore();
+  const { isUpdatingProfile, updateProfile, authUser } = useAuthStore();
   const [selectedImage, setSelectedImage] = useState(null);
 
   const handleImageUpload = async (e) => {

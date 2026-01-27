@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import AuthImagePattern from "../components/AuthImagePattern.jsx";
-import { userAuthStore } from "../store/useAuthStore.js";
+import { useAuthStore } from "../store/useAuthStore.js";
 import {
   Eye,
   EyeOff,
@@ -22,7 +22,7 @@ const SignUpPage = () => {
     password: "",
   });
 
-  const { signUp, isSigningUp } = userAuthStore();
+  const { signUp, isSigningUp } = useAuthStore();
   const validateForm = () => {
     if (!formData.fullName.trim()) return toast.error("Full Name is required");
     if (!formData.email.trim()) return toast.error("Email is required");

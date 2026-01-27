@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { axiosInstance } from "../lib/axios.js";
 import { toast } from "react-hot-toast";
+import { useAuthStore } from "./useAuthStore.js";
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -12,7 +13,7 @@ export const useChatStore = create((set, get) => ({
   getUsers: async () => {
     set({ isUsersLoading: true });
     try {
-      const res = await axiosInstance.get("/messages/users");
+      const res = await axiosInstance.get("/message/users");
       set({ users: res.data });
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -28,7 +29,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get(`/message/${userId}`);
       set({ messages: res.data });
     } catch (error) {
-      consolelog("Error fetching messages:", error);
+      console.log("Error fetching messages:", error);
       toast.error(error.response.data.message);
     } finally {
       set({ isMessagesLoading: false });
@@ -40,7 +41,7 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.post(
         `/message/send/${selectedUser._id}`,
-        messagedata
+        messagedata,
       );
       set({ messages: [...messages, res.data] });
     } catch (error) {
@@ -49,7 +50,29 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  setSelectedUser: (selectedUser) => {
-    set({ selectedUser: selectedUser });
+  subscribeToMessages: () => {
+    const { selectedUser } = get();
+    if (!selectedUser) return;
+
+    const socket = useAuthStore.getState().socket;
+
+    socket.on("newMessage", (newMessage) => {
+      const isMessageSentFromSelectedUser =
+        newMessage.senderId === selectedUser._id;
+      if (!isMessageSentFromSelectedUser) return;
+      set({
+        messages: [...get().messages, newMessage],
+      });
+    });
+  },
+
+  unSubscribeFromMessages: () => {
+    const socket = useAuthStore.getState().socket;
+    socket.off("newMessage");
+  },
+
+  setSelectedUser: (SelectedUser) => {
+    console.log("Selected User from usechatstore:", SelectedUser);
+    set({ selectedUser: SelectedUser });
   },
 }));
