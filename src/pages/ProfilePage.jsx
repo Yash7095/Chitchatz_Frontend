@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore.js";
 import { Camera, Mail, User } from "lucide-react";
+import ImageModal from "../Modals/ImageModal.jsx";
 
 const ProfilePage = () => {
   const { isUpdatingProfile, updateProfile, authUser } = useAuthStore();
   const [selectedImage, setSelectedImage] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(null);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -37,6 +39,7 @@ const ProfilePage = () => {
                 src={selectedImage || authUser?.profilePic || "/avatar.png"}
                 alt="Profile"
                 className="size-32 rounded-full object-cover border-4 "
+                onClick={() => setIsModalOpen(true)}
               />
               <label
                 htmlFor="avatar-upload"
@@ -105,6 +108,13 @@ const ProfilePage = () => {
           </div>
         </div>
       </div>
+      {/* { Image Modal } */}
+      <ImageModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        imageSrc={selectedImage || authUser?.profilePic || "/avatar.png"}
+        alt={authUser?.fullName || "Profile"}
+      />
     </div>
   );
 };

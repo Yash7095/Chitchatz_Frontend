@@ -10,7 +10,7 @@ const SideBar = () => {
   const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } =
     useChatStore();
 
-  const { onlineUsers } = useAuthStore();
+  const { socket, authUser, onlineUsers } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
 
   useEffect(() => {
@@ -21,7 +21,51 @@ const SideBar = () => {
     ? users.filter((user) => onlineUsers.includes(user._id))
     : users;
 
+  // Initialize state from localStorage
+  const [unreadMessages, setUnreadMessages] = useState(() => {
+    const stored = localStorage.getItem("unreadMessages");
+    return stored ? JSON.parse(stored) : {};
+  });
+
+  const { messages } = useChatStore();
+  // console.log("Messages in Sidebar:", messages);
+
+  useEffect(() => {
+    if (!socket || !authUser) return;
+
+    const handleNewMessage = (message) => {
+      if (message.senderId === authUser._id) return;
+
+      if (selectedUser?._id !== message.senderId) {
+        setUnreadMessages((prev) => {
+          const updated = {
+            ...prev,
+            [message.senderId]: true,
+          };
+          localStorage.setItem("unreadMessages", JSON.stringify(updated));
+          return updated;
+        });
+      }
+    };
+
+    socket.on("newMessage", handleNewMessage);
+
+    return () => socket.off("newMessage", handleNewMessage);
+  }, [socket, selectedUser, authUser]);
+
+  const handleSelectUser = (user) => {
+    setSelectedUser(user);
+
+    setUnreadMessages((prev) => {
+      const updated = { ...prev };
+      delete updated[user._id];
+      localStorage.setItem("unreadMessages", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   if (isUsersLoading) return <SideBarSkeleton />;
+
   return (
     <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
       <div className="border-b border-base-300 w-full p-5">
@@ -50,7 +94,7 @@ const SideBar = () => {
         {filteredUsers.map((user) => (
           <button
             key={user._id}
-            onClick={() => setSelectedUser(user)}
+            onClick={() => handleSelectUser(user)}
             className={`
               w-full p-3 flex items-center gap-3
               hover:bg-base-300 transition-colors
@@ -71,6 +115,12 @@ const SideBar = () => {
                 <span
                   className="absolute bottom-0 right-0 size-3 bg-green-500 
                   rounded-full ring-2 ring-zinc-900"
+                />
+              )}
+              {unreadMessages[user._id] && (
+                <span
+                  className="absolute -top-1 -right-1 size-3 bg-red-500 
+                  rounded-full animate-pulse ring-2 ring-white"
                 />
               )}
             </div>

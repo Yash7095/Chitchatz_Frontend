@@ -1,10 +1,18 @@
 import { X } from "lucide-react";
 import { useChatStore } from "../store/useChatStore.js";
 import { useAuthStore } from "../store/useAuthStore.js";
+import { useNavigate } from "react-router-dom";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
+
+  const navigate = useNavigate();
+
+  const handleClickNavigator = () => {
+    console.log("navigating to profile page");
+    navigate(`/profile/${selectedUser._id}`);
+  };
 
   return (
     <div className="p-2.5 border-b border-base-300">
@@ -12,7 +20,10 @@ const ChatHeader = () => {
         <div className="flex items-center gap-3">
           {/* Avatar */}
           <div className="avatar">
-            <div className="size-10 rounded-full relative">
+            <div
+              className="size-10 rounded-full relative"
+              onClick={handleClickNavigator}
+            >
               <img
                 src={selectedUser.profilePic || "/avatar.png"}
                 alt={selectedUser.fullName}
