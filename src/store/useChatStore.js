@@ -9,6 +9,12 @@ export const useChatStore = create((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
+  isTyping: false,
+  typingUserId: null,
+  replyingTo: null,
+  pinnedMessages: [],
+  smartReplies: [],
+  isLoadingSmartReplies: false,
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -16,8 +22,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get("/message/users");
       set({ users: res.data });
     } catch (error) {
-      console.error("Error fetching users:", error);
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Failed to load users");
     } finally {
       set({ isUsersLoading: false });
     }
@@ -28,40 +33,138 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get(`/message/${userId}`);
       set({ messages: res.data });
+      await axiosInstance.put(`/message/read/${userId}`);
     } catch (error) {
-      console.log("Error fetching messages:", error);
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Failed to load messages");
     } finally {
       set({ isMessagesLoading: false });
     }
   },
 
-  sendMessage: async (messagedata) => {
+  sendMessage: async (messageData) => {
     const { selectedUser, messages } = get();
     try {
-      const res = await axiosInstance.post(
-        `/message/send/${selectedUser._id}`,
-        messagedata,
-      );
-      set({ messages: [...messages, res.data] });
+      const res = await axiosInstance.post(`/message/send/${selectedUser._id}`, messageData);
+      set({ messages: [...messages, res.data], replyingTo: null, smartReplies: [] });
     } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Failed to send message");
     }
   },
+
+  // Reactions
+  reactToMessage: async (messageId, emoji) => {
+    try {
+      await axiosInstance.put(`/message/${messageId}/react`, { emoji });
+    } catch (error) {
+      toast.error("Failed to react");
+    }
+  },
+
+  // Pin
+  pinMessage: async (messageId) => {
+    try {
+      await axiosInstance.put(`/message/${messageId}/pin`);
+    } catch (error) {
+      toast.error("Failed to pin message");
+    }
+  },
+
+  getPinnedMessages: async (userId) => {
+    try {
+      const res = await axiosInstance.get(`/message/${userId}/pinned`);
+      set({ pinnedMessages: res.data });
+    } catch (_) {}
+  },
+
+  // Smart Replies
+  fetchSmartReplies: async () => {
+    const { selectedUser } = get();
+    if (!selectedUser) return;
+    set({ isLoadingSmartReplies: true, smartReplies: [] });
+    try {
+      const res = await axiosInstance.post("/ai/smart-replies", {
+        conversationUserId: selectedUser._id,
+      });
+      set({ smartReplies: res.data });
+    } catch (_) {
+      set({ smartReplies: [] });
+    } finally {
+      set({ isLoadingSmartReplies: false });
+    }
+  },
+
+  clearSmartReplies: () => set({ smartReplies: [] }),
+
+  setReplyingTo: (message) => set({ replyingTo: message }),
+  clearReplyingTo: () => set({ replyingTo: null }),
 
   subscribeToMessages: () => {
     const { selectedUser } = get();
     if (!selectedUser) return;
-
     const socket = useAuthStore.getState().socket;
 
     socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser =
-        newMessage.senderId === selectedUser._id;
-      if (!isMessageSentFromSelectedUser) return;
+      if (newMessage.senderId !== selectedUser._id) return;
+      set({ messages: [...get().messages, newMessage] });
+      axiosInstance.put(`/message/read/${selectedUser._id}`).catch(() => {});
+      // Auto-fetch smart replies for received messages
+      get().fetchSmartReplies();
+    });
+
+    socket.on("userTyping", ({ senderId }) => {
+      if (senderId === selectedUser._id) set({ isTyping: true, typingUserId: senderId });
+    });
+
+    socket.on("userStopTyping", ({ senderId }) => {
+      if (senderId === selectedUser._id) set({ isTyping: false, typingUserId: null });
+    });
+
+    socket.on("messagesRead", ({ byUserId }) => {
+      if (byUserId === selectedUser._id) {
+        set({
+          messages: get().messages.map((m) =>
+            m.status !== "read" ? { ...m, status: "read" } : m
+          ),
+        });
+      }
+    });
+
+    socket.on("messagesDelivered", ({ messageIds }) => {
       set({
-        messages: [...get().messages, newMessage],
+        messages: get().messages.map((m) =>
+          messageIds.includes(m._id) && m.status === "sent"
+            ? { ...m, status: "delivered" }
+            : m
+        ),
+      });
+    });
+
+    // Reactions
+    socket.on("reactionUpdate", ({ messageId, reactions }) => {
+      set({
+        messages: get().messages.map((m) =>
+          m._id === messageId ? { ...m, reactions } : m
+        ),
+      });
+    });
+
+    // Pin
+    socket.on("messagePinned", ({ messageId, isPinned }) => {
+      set({
+        messages: get().messages.map((m) =>
+          m._id === messageId ? { ...m, isPinned } : m
+        ),
+        pinnedMessages: isPinned
+          ? [get().messages.find((m) => m._id === messageId), ...get().pinnedMessages].filter(Boolean)
+          : get().pinnedMessages.filter((m) => m._id !== messageId),
+      });
+    });
+
+    // Self-destruct
+    socket.on("messageExpired", ({ messageId }) => {
+      set({
+        messages: get().messages.filter((m) => m._id !== messageId),
+        pinnedMessages: get().pinnedMessages.filter((m) => m._id !== messageId),
       });
     });
   },
@@ -69,10 +172,31 @@ export const useChatStore = create((set, get) => ({
   unSubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     socket.off("newMessage");
+    socket.off("userTyping");
+    socket.off("userStopTyping");
+    socket.off("messagesRead");
+    socket.off("messagesDelivered");
+    socket.off("reactionUpdate");
+    socket.off("messagePinned");
+    socket.off("messageExpired");
   },
 
-  setSelectedUser: (SelectedUser) => {
-    // console.log("Selected User from usechatstore:", SelectedUser);
-    set({ selectedUser: SelectedUser });
+  emitTyping: (receiverId) => {
+    useAuthStore.getState().socket?.emit("typing", { receiverId });
+  },
+
+  emitStopTyping: (receiverId) => {
+    useAuthStore.getState().socket?.emit("stopTyping", { receiverId });
+  },
+
+  setSelectedUser: (selectedUser) => {
+    set({
+      selectedUser,
+      isTyping: false,
+      typingUserId: null,
+      replyingTo: null,
+      smartReplies: [],
+      pinnedMessages: [],
+    });
   },
 }));

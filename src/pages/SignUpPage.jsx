@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import AuthImagePattern from "../components/AuthImagePattern.jsx";
 import { useAuthStore } from "../store/useAuthStore.js";
+import { motion } from "framer-motion";
 import {
   Eye,
   EyeOff,
@@ -46,7 +47,12 @@ const SignUpPage = () => {
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* left side */}
       <div className="flex flex-col justify-center items-center p-6 sm:p-12">
-        <div className="w-full max-w-md space-y-8">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="w-full max-w-md space-y-8"
+        >
           {/* LOGO */}
           <div className="text-center mb-8">
             <div className="flex flex-col items-center gap-2 group">
@@ -159,7 +165,7 @@ const SignUpPage = () => {
               </Link>
             </p>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* right side */}
