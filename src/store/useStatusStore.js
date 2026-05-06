@@ -1,9 +1,13 @@
 import { create } from "zustand";
 import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
+import { useAuthStore } from "./useAuthStore.js";
+
+// Track which status IDs have already been marked viewed this session
+const viewedThisSession = new Set();
 
 export const useStatusStore = create((set, get) => ({
-  statusGroups: [],   // [{ user, statuses[], hasUnseen }]
+  statusGroups: [],
   isLoading: false,
   isUploading: false,
   viewerOpen: false,
@@ -36,16 +40,11 @@ export const useStatusStore = create((set, get) => ({
   },
 
   viewStatus: async (statusId) => {
+    // Only mark as viewed once per session — prevents inflating count on repeat opens
+    if (viewedThisSession.has(statusId)) return;
+    viewedThisSession.add(statusId);
     try {
       await axiosInstance.put(`/status/${statusId}/view`);
-      set({
-        statusGroups: get().statusGroups.map((g) => ({
-          ...g,
-          statuses: g.statuses.map((s) =>
-            s._id === statusId ? { ...s, viewed: true } : s
-          ),
-        })),
-      });
     } catch (_) {}
   },
 
@@ -54,7 +53,7 @@ export const useStatusStore = create((set, get) => ({
       await axiosInstance.delete(`/status/${statusId}`);
       toast.success("Status deleted");
       get().getStatuses();
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete");
     }
   },
@@ -88,5 +87,18 @@ export const useStatusStore = create((set, get) => ({
         viewerStatusIdx: prevGroup.statuses.length - 1,
       });
     }
+  },
+
+  // Call this once after socket connects
+  listenForNewStatuses: () => {
+    const socket = useAuthStore.getState().socket;
+    if (!socket) return;
+    socket.on("newStatus", () => {
+      get().getStatuses();
+    });
+  },
+
+  stopListeningForStatuses: () => {
+    useAuthStore.getState().socket?.off("newStatus");
   },
 }));

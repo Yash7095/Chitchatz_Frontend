@@ -3,7 +3,7 @@ import { useAuthStore } from "../store/useAuthStore.js";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Camera, Mail, User, AtSign, Phone, FileText,
-  Smile, Save, Loader, ArrowLeft, Calendar, Shield
+  Smile, Save, Loader, ArrowLeft, Calendar, Shield, Trash2
 } from "lucide-react";
 import ImageModal from "../Modals/ImageModal.jsx";
 import { motion } from "framer-motion";
@@ -60,8 +60,14 @@ const ProfilePage = () => {
     reader.onload = async () => {
       setSelectedImage(reader.result);
       await updateProfile({ profilePic: reader.result });
+      setSelectedImage(null); // clear local preview — show Cloudinary URL from authUser
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = async () => {
+    await updateProfile({ profilePic: "remove" });
+    setSelectedImage(null);
   };
 
   const handleSave = async () => {
@@ -223,6 +229,17 @@ const ProfilePage = () => {
                     disabled={isUpdatingProfile}
                   />
                 </label>
+                {(selectedImage || authUser?.profilePic) && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    disabled={isUpdatingProfile}
+                    className="absolute -top-1 -right-1 bg-error text-error-content p-1 rounded-full shadow hover:scale-105 transition-transform"
+                    title="Remove photo"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                )}
               </div>
 
               <div className="flex gap-2">

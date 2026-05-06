@@ -12,9 +12,18 @@ const StatusBar = () => {
 
   const [showUploader, setShowUploader] = useState(false);
 
+  const { listenForNewStatuses, stopListeningForStatuses } = useStatusStore();
+  const { socket } = useAuthStore();
+
   useEffect(() => {
     getStatuses();
-  }, [getStatuses]);
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    listenForNewStatuses();
+    return () => stopListeningForStatuses();
+  }, [socket]);
 
   // Find own status group
   const ownGroup = statusGroups.find(

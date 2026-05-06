@@ -7,6 +7,7 @@ import { useAuthStore } from "./useAuthStore.js";
 let _newGroupMessageHandler = null;
 let _groupUpdatedHandler = null;
 let _removedFromGroupHandler = null;
+let _pollVotedHandler = null;
 
 export const useGroupStore = create((set, get) => ({
   groups: [],
@@ -60,6 +61,30 @@ export const useGroupStore = create((set, get) => ({
     }
   },
 
+  createPoll: async ({ question, options }) => {
+    const { selectedGroup, groupMessages } = get();
+    try {
+      const res = await axiosInstance.post(`/groups/${selectedGroup._id}/poll`, { question, options });
+      set({ groupMessages: [...groupMessages, res.data] });
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to create poll");
+    }
+  },
+
+  votePoll: async (msgId, optionIndex) => {
+    const { selectedGroup } = get();
+    try {
+      const res = await axiosInstance.put(`/groups/${selectedGroup._id}/poll/${msgId}/vote`, { optionIndex });
+      set({
+        groupMessages: get().groupMessages.map((m) =>
+          m._id === msgId ? { ...m, poll: res.data } : m
+        ),
+      });
+    } catch (err) {
+      toast.error("Failed to vote");
+    }
+  },
+
   setSelectedGroup: (group) => set({ selectedGroup: group, groupMessages: [] }),
 
   subscribeToGroupMessages: () => {
@@ -92,9 +117,19 @@ export const useGroupStore = create((set, get) => ({
       toast("You were removed from a group");
     };
 
+    _pollVotedHandler = ({ groupId, msgId, poll }) => {
+      if (groupId !== get().selectedGroup?._id) return;
+      set({
+        groupMessages: get().groupMessages.map((m) =>
+          m._id === msgId ? { ...m, poll } : m
+        ),
+      });
+    };
+
     socket.on("newGroupMessage", _newGroupMessageHandler);
     socket.on("groupUpdated", _groupUpdatedHandler);
     socket.on("removedFromGroup", _removedFromGroupHandler);
+    socket.on("pollVoted", _pollVotedHandler);
   },
 
   unsubscribeFromGroupMessages: () => {
@@ -112,6 +147,10 @@ export const useGroupStore = create((set, get) => ({
     if (_removedFromGroupHandler) {
       socket.off("removedFromGroup", _removedFromGroupHandler);
       _removedFromGroupHandler = null;
+    }
+    if (_pollVotedHandler) {
+      socket.off("pollVoted", _pollVotedHandler);
+      _pollVotedHandler = null;
     }
   },
 

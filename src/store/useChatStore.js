@@ -95,6 +95,51 @@ export const useChatStore = create((set, get) => ({
 
   clearSmartReplies: () => set({ smartReplies: [] }),
 
+  // 8.1 — Search
+  searchMessages: async (q) => {
+    try {
+      const res = await axiosInstance.get(`/message/search?q=${encodeURIComponent(q)}`);
+      return res.data;
+    } catch {
+      return [];
+    }
+  },
+
+  // 8.3 — AI Summary
+  summarizeConversation: async () => {
+    const { selectedUser } = get();
+    if (!selectedUser) return null;
+    try {
+      const res = await axiosInstance.post("/ai/summarize", { conversationUserId: selectedUser._id });
+      return res.data.summary;
+    } catch {
+      return "Failed to generate summary.";
+    }
+  },
+
+  // 8.6 — Bookmark
+  toggleBookmark: async (messageId) => {
+    try {
+      const res = await axiosInstance.put(`/message/${messageId}/bookmark`);
+      set({
+        messages: get().messages.map((m) =>
+          m._id === messageId ? { ...m, isBookmarked: res.data.isBookmarked } : m
+        ),
+      });
+    } catch {
+      toast.error("Failed to bookmark");
+    }
+  },
+
+  getBookmarks: async () => {
+    try {
+      const res = await axiosInstance.get("/message/bookmarks");
+      return res.data;
+    } catch {
+      return [];
+    }
+  },
+
   setReplyingTo: (message) => set({ replyingTo: message }),
   clearReplyingTo: () => set({ replyingTo: null }),
 
@@ -107,8 +152,16 @@ export const useChatStore = create((set, get) => ({
       if (newMessage.senderId !== selectedUser._id) return;
       set({ messages: [...get().messages, newMessage] });
       axiosInstance.put(`/message/read/${selectedUser._id}`).catch(() => {});
-      // Auto-fetch smart replies for received messages
       get().fetchSmartReplies();
+    });
+
+    // Update profile pic / mood in users list when someone updates their profile
+    socket.on("profileUpdated", ({ userId, profilePic, fullName, mood }) => {
+      set({
+        users: get().users.map((u) =>
+          u._id === userId ? { ...u, profilePic, fullName, mood } : u
+        ),
+      });
     });
 
     socket.on("userTyping", ({ senderId }) => {
@@ -179,6 +232,7 @@ export const useChatStore = create((set, get) => ({
     socket.off("reactionUpdate");
     socket.off("messagePinned");
     socket.off("messageExpired");
+    socket.off("profileUpdated");
   },
 
   emitTyping: (receiverId) => {
@@ -192,6 +246,7 @@ export const useChatStore = create((set, get) => ({
   setSelectedUser: (selectedUser) => {
     set({
       selectedUser,
+      messages: [],
       isTyping: false,
       typingUserId: null,
       replyingTo: null,

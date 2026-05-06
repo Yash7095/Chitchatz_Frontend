@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 
 const BASE_URL =
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.MODE === "development" ? "http://192.168.1.16:5001" : "/");
+  (import.meta.env.MODE === "development" ? "http://10.238.229.243:5001" : "/");
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
@@ -95,6 +95,11 @@ export const useAuthStore = create((set, get) => ({
     socket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
+
+    // Request browser notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
   },
 
   disconnectSocket: () => {
